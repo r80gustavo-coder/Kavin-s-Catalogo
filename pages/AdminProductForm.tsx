@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useData } from '../context/DataContext';
+import { useAuth } from '../context/AuthContext';
 import { Product, ColorVariant } from '../types';
 import { generateProductDescription } from '../services/geminiService';
 import { supabase } from '../services/supabaseClient';
 import { Wand2, Plus, X, Save, ArrowLeft, Loader2, Upload, Check, Star, Trash2, Package } from 'lucide-react';
 
 interface Variation {
-  id?: string; // Existing ID if editing
-  tempId: string; // To track in UI
+  id?: string;
+  tempId: string;
   reference: string;
   sizes: string[];
   colors: ColorVariant[];
@@ -20,10 +21,11 @@ const AdminProductForm: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const { products, addProduct, updateProduct, deleteProduct } = useData();
+  const { isOfflineMode } = useAuth(); // Import Offline Status
 
   const isEditing = !!id;
 
-  // --- GLOBAL DATA (Shared by all variants) ---
+  // --- GLOBAL DATA ---
   const [generalData, setGeneralData] = useState({
     name: '',
     description: '',
@@ -33,33 +35,33 @@ const AdminProductForm: React.FC = () => {
     images: [] as string[]
   });
 
-  // --- VARIATIONS (List of Ref/Size/Color/Price) ---
   const [variations, setVariations] = useState<Variation[]>([
     { tempId: '1', reference: '', sizes: [], colors: [], priceRepresentative: 0, priceSacoleira: 0 }
   ]);
   const [activeVariationIndex, setActiveVariationIndex] = useState(0);
 
-  // --- UI STATE ---
   const [loadingAI, setLoadingAI] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isProcessingImg, setIsProcessingImg] = useState(false);
 
-  // --- INPUT HELPERS ---
   const [sizeInput, setSizeInput] = useState('');
   const [colorInput, setColorInput] = useState<ColorVariant>({ hex: '#000000', name: '' });
 
-  // LOAD DATA FOR EDITING
+  // CHECK OFFLINE MODE
+  useEffect(() => {
+    if (isOfflineMode) {
+      alert("AVISO: Você está em Modo Offline/Visitante.\n\nVocê pode testar a interface, mas NÃO conseguirá salvar novos produtos no banco de dados.\n\nPara salvar, faça login com uma conta confirmada.");
+    }
+  }, [isOfflineMode]);
+
   useEffect(() => {
     if (isEditing && id) {
-      // Find the product and ALL its group siblings
       const product = products.find(p => p.id === id);
       if (product) {
-        // Find other products with same group_id
         const groupVariants = product.groupId 
           ? products.filter(p => p.groupId === product.groupId)
           : [product];
 
-        // Set General Data from the first one
         setGeneralData({
           name: product.name,
           description: product.description,
@@ -69,7 +71,6 @@ const AdminProductForm: React.FC = () => {
           images: product.images || []
         });
 
-        // Set Variations
         const vars: Variation[] = groupVariants.map(p => ({
           id: p.id,
           tempId: p.id,
@@ -84,12 +85,11 @@ const AdminProductForm: React.FC = () => {
     }
   }, [id, products, isEditing]);
 
-  // --- HANDLERS FOR GENERAL DATA ---
+  // --- HANDLERS REMAIN SAME ---
   const handleGeneralChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setGeneralData(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  // --- HANDLERS FOR IMAGES ---
   const resizeImage = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -153,7 +153,6 @@ const AdminProductForm: React.FC = () => {
     });
   };
 
-  // --- HANDLERS FOR VARIATIONS ---
   const getCurrentVariation = () => variations[activeVariationIndex];
 
   const updateCurrentVariation = (field: keyof Variation, value: any) => {
@@ -176,7 +175,7 @@ const AdminProductForm: React.FC = () => {
         priceSacoleira: 0 
       }
     ]);
-    setActiveVariationIndex(variations.length); // Switch to new tab
+    setActiveVariationIndex(variations.length); 
   };
 
   const removeVariation = (index: number) => {
@@ -185,25 +184,15 @@ const AdminProductForm: React.FC = () => {
       return;
     }
     const variationToRemove = variations[index];
-    
-    // If we are editing and this variation exists in DB, we should technically delete it from DB upon save
-    // For simplicity here, we will just remove from list. 
-    // Ideally, we'd track 'deletedIds' and process them on Save.
     if (variationToRemove.id) {
-       if (confirm("Esta variação já existe. Ela será removida ao salvar. Continuar?")) {
-           // We will handle deletion logic in handleSave by comparing IDs
-       } else {
-           return;
-       }
+       if (!confirm("Esta variação já existe. Ela será removida ao salvar. Continuar?")) return;
     }
-
     setVariations(prev => prev.filter((_, i) => i !== index));
     if (activeVariationIndex >= index && activeVariationIndex > 0) {
       setActiveVariationIndex(activeVariationIndex - 1);
     }
   };
 
-  // --- SIZES & COLORS (Apply to Current Variation) ---
   const toggleSizeGroup = (group: 'STANDARD' | 'PLUS') => {
     const standardSizes = ['P', 'M', 'G', 'GG'];
     const plusSizes = ['G1', 'G2', 'G3'];
@@ -235,11 +224,9 @@ const AdminProductForm: React.FC = () => {
     }
   };
 
-  // --- AI GENERATION ---
   const handleGenerateDescription = async () => {
     if (!generalData.name) { alert("Preencha o Nome."); return; }
     setLoadingAI(true);
-    // Use data from first variation for context
     const firstVar = variations[0];
     const desc = await generateProductDescription(
       generalData.name,
@@ -252,7 +239,6 @@ const AdminProductForm: React.FC = () => {
     setLoadingAI(false);
   };
 
-  // --- SAVE LOGIC ---
   const base64ToBlob = async (url: string) => {
     const res = await fetch(url);
     return await res.blob();
@@ -270,6 +256,10 @@ const AdminProductForm: React.FC = () => {
         if (!error) {
           const { data } = supabase.storage.from('product-images').getPublicUrl(fileName);
           uploadedUrls.push(data.publicUrl);
+        } else {
+            console.error("Erro upload:", error);
+            // If offline/auth error, this will show
+            if (error.message.includes('security')) throw new Error("Erro de permissão no upload de imagens. Verifique seu login.");
         }
       }
     }
@@ -277,7 +267,12 @@ const AdminProductForm: React.FC = () => {
   };
 
   const handleSave = async () => {
-    // Validations
+    if (isOfflineMode) {
+        alert("ERRO: Você está em Modo Offline.\n\nPara salvar dados, você deve fazer Login com uma conta verificada.");
+        navigate('/login');
+        return;
+    }
+
     if (generalData.images.length === 0) return alert("Adicione fotos.");
     if (!generalData.name) return alert("Adicione um nome.");
     for (const v of variations) {
@@ -289,19 +284,14 @@ const AdminProductForm: React.FC = () => {
     try {
       const finalImages = await uploadImages();
       
-      // Determine Group ID
-      // If editing and product has group, use it. Else generate new.
       let groupId = isEditing && products.find(p => p.id === id)?.groupId;
       if (!groupId) {
-         // Generate a new UUID if we don't have one (simple random for now, or let DB handle if we inserted one parent)
-         // Since we are inserting multiple rows, we need a shared ID.
          groupId = crypto.randomUUID(); 
       }
 
-      // Process Variations
       for (const v of variations) {
         const productPayload: Product = {
-          id: v.id || '', // Empty for new
+          id: v.id || '',
           groupId: groupId,
           name: generalData.name,
           description: generalData.description,
@@ -309,7 +299,6 @@ const AdminProductForm: React.FC = () => {
           fabric: generalData.fabric,
           isHighlight: generalData.isHighlight,
           images: finalImages,
-          // Variation Specifics
           reference: v.reference,
           sizes: v.sizes,
           colors: v.colors,
@@ -324,7 +313,6 @@ const AdminProductForm: React.FC = () => {
         }
       }
 
-      // Handle Deleted Variations (if editing)
       if (isEditing) {
          const originalProduct = products.find(p => p.id === id);
          if (originalProduct && originalProduct.groupId) {
@@ -340,9 +328,9 @@ const AdminProductForm: React.FC = () => {
 
       alert("Produto salvo com sucesso!");
       navigate('/');
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      alert("Erro ao salvar.");
+      alert(`Erro ao salvar: ${e.message}`);
     } finally {
       setIsSaving(false);
     }
@@ -355,22 +343,31 @@ const AdminProductForm: React.FC = () => {
           <ArrowLeft className="w-4 h-4 mr-2" /> Voltar ao Catálogo
         </button>
 
+        {isOfflineMode && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 flex items-center">
+             <div className="font-bold mr-2">MODO OFFLINE:</div>
+             <div>O salvamento está desativado. Faça login para editar o catálogo real.</div>
+          </div>
+        )}
+
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
           <div className="bg-gray-900 px-6 py-4 flex justify-between items-center">
             <h1 className="text-white font-bold text-xl">
               {isEditing ? 'Editar Produto e Variações' : 'Novo Produto'}
             </h1>
-            <button onClick={handleSave} disabled={isSaving} className="bg-white text-gray-900 px-4 py-2 rounded font-bold hover:bg-gray-100 flex items-center">
+            <button 
+                onClick={handleSave} 
+                disabled={isSaving || isOfflineMode} 
+                className={`bg-white text-gray-900 px-4 py-2 rounded font-bold flex items-center ${isOfflineMode ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-100'}`}
+            >
               {isSaving ? <Loader2 className="animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
               Salvar Tudo
             </button>
           </div>
 
           <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
-            
             {/* LEFT COLUMN: GLOBAL IMAGES & INFO */}
             <div className="lg:col-span-1 space-y-6">
-               {/* Images */}
                <div className="space-y-2">
                  <label className="font-bold text-gray-700">Fotos (Compartilhadas)</label>
                  <div className="grid grid-cols-2 gap-2">
@@ -391,7 +388,6 @@ const AdminProductForm: React.FC = () => {
                  </div>
                </div>
 
-               {/* Global Fields */}
                <div className="space-y-3">
                   <div>
                     <label className="text-sm font-medium">Nome do Modelo</label>
@@ -418,7 +414,6 @@ const AdminProductForm: React.FC = () => {
             {/* RIGHT COLUMN: VARIATIONS & DESCRIPTION */}
             <div className="lg:col-span-2 space-y-6">
               
-              {/* Variations Tabs */}
               <div className="border rounded-xl p-4 bg-gray-50">
                 <div className="flex justify-between items-center mb-4">
                    <h3 className="font-bold text-lg flex items-center"><Package className="w-5 h-5 mr-2"/> Variações / Grades</h3>
@@ -427,7 +422,6 @@ const AdminProductForm: React.FC = () => {
                    </button>
                 </div>
 
-                {/* Tabs Header */}
                 <div className="flex space-x-1 border-b mb-4 overflow-x-auto">
                    {variations.map((v, idx) => (
                      <button
@@ -442,7 +436,6 @@ const AdminProductForm: React.FC = () => {
                    ))}
                 </div>
 
-                {/* Active Variation Content */}
                 <div className="bg-white p-4 rounded-b-lg rounded-tr-lg border border-t-0 -mt-4 pt-6">
                    <div className="flex justify-end mb-2">
                       <button onClick={() => removeVariation(activeVariationIndex)} className="text-red-500 text-xs flex items-center hover:underline">
@@ -472,7 +465,6 @@ const AdminProductForm: React.FC = () => {
                       </div>
                    </div>
 
-                   {/* Sizes */}
                    <div className="mb-4">
                       <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Tamanhos</label>
                       <div className="flex gap-2 mb-2">
@@ -490,7 +482,6 @@ const AdminProductForm: React.FC = () => {
                       </div>
                    </div>
 
-                   {/* Colors */}
                    <div className="mb-4">
                       <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Cores</label>
                       <div className="flex flex-wrap gap-2 mb-2">
@@ -512,7 +503,6 @@ const AdminProductForm: React.FC = () => {
                 </div>
               </div>
 
-              {/* Description */}
               <div className="border rounded-xl p-4">
                  <div className="flex justify-between mb-2">
                    <label className="font-bold text-gray-700">Descrição</label>

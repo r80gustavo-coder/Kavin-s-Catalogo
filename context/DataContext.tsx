@@ -28,7 +28,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .order('created_at', { ascending: false });
 
       if (error) {
-        // Se a tabela não existir, ignora erro silenciosamente em dev
         if (error.code === '42P01') console.warn("Tabela products não encontrada.");
         throw error;
       }
@@ -65,10 +64,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const addProduct = async (product: Product) => {
     try {
+      // CHECK AUTH FIRST
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+         throw new Error("SESSÃO EXPIRADA OU MODO OFFLINE.\n\nVocê não está conectado ao servidor do Supabase. Verifique se você confirmou seu email e fez login corretamente. O modo offline não permite salvar alterações.");
+      }
+
       const { id, groupId, ...rest } = product;
       
-      // Ensure groupId is valid UUID or null (but for grouping we need it)
       const validGroupId = groupId && groupId.length > 10 ? groupId : null;
+      
+      // Sanitize Numbers
+      const pRep = isNaN(Number(rest.priceRepresentative)) ? 0 : Number(rest.priceRepresentative);
+      const pSac = isNaN(Number(rest.priceSacoleira)) ? 0 : Number(rest.priceSacoleira);
 
       const dbProduct = {
         group_id: validGroupId,
@@ -76,9 +84,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         name: rest.name,
         description: rest.description,
         sizes: rest.sizes,
-        colors: rest.colors, // Supabase handles JSONB automatically
-        price_representative: Number(rest.priceRepresentative),
-        price_sacoleira: Number(rest.priceSacoleira),
+        colors: rest.colors, 
+        price_representative: pRep,
+        price_sacoleira: pSac,
         images: rest.images,
         category: rest.category,
         fabric: rest.fabric,
@@ -89,19 +97,28 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (error) {
           console.error("Supabase Insert Error:", error);
+          // Translate common errors
+          if (error.message.includes("row-level security")) {
+              throw new Error("PERMISSÃO NEGADA (RLS).\n\nSeu usuário não tem permissão de ADMIN no banco de dados. Tente sair e entrar novamente.");
+          }
           throw new Error(error.message || JSON.stringify(error));
       }
       
       await fetchProducts();
     } catch (error: any) {
       console.error("Erro detalhado ao adicionar produto:", error);
-      alert(`Erro ao salvar no banco de dados: ${error.message || "Erro desconhecido"}`);
-      throw error;
+      throw error; // Re-throw to be caught by the form
     }
   };
 
   const updateProduct = async (product: Product) => {
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Você está em modo offline. Não é possível salvar.");
+
+      const pRep = isNaN(Number(product.priceRepresentative)) ? 0 : Number(product.priceRepresentative);
+      const pSac = isNaN(Number(product.priceSacoleira)) ? 0 : Number(product.priceSacoleira);
+
       const dbProduct = {
         group_id: product.groupId,
         reference: product.reference,
@@ -109,8 +126,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         description: product.description,
         sizes: product.sizes,
         colors: product.colors,
-        price_representative: Number(product.priceRepresentative),
-        price_sacoleira: Number(product.priceSacoleira),
+        price_representative: pRep,
+        price_sacoleira: pSac,
         images: product.images,
         category: product.category,
         fabric: product.fabric,
@@ -126,13 +143,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await fetchProducts();
     } catch (error: any) {
       console.error("Erro ao atualizar produto:", error);
-      alert(`Erro ao atualizar: ${error.message}`);
       throw error;
     }
   };
 
   const deleteProduct = async (id: string) => {
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Modo Offline");
+
       const { error } = await supabase.from('products').delete().eq('id', id);
       if (error) throw error;
       setProducts(prev => prev.filter(p => p.id !== id));
@@ -144,6 +163,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const deleteGroup = async (groupId: string) => {
      try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Modo Offline");
+
       const { error } = await supabase.from('products').delete().eq('group_id', groupId);
       if (error) throw error;
       setProducts(prev => prev.filter(p => p.groupId !== groupId));
