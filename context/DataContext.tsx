@@ -9,6 +9,7 @@ interface DataContextType {
   addProduct: (product: Product) => Promise<void>;
   updateProduct: (product: Product) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
+  deleteGroup: (groupId: string) => Promise<void>;
   refreshProducts: () => Promise<void>;
 }
 
@@ -31,10 +32,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (data) {
-        // Mapear campos do banco para o frontend (snake_case para camelCase se necessário)
-        // No nosso caso, o banco foi criado compativel, exceto underscore fields
         const formattedProducts: Product[] = data.map(p => ({
           id: p.id,
+          groupId: p.group_id,
           reference: p.reference,
           name: p.name,
           description: p.description,
@@ -51,7 +51,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (error) {
       console.error("Erro ao buscar produtos:", error);
-      // Fallback to mock data if connection fails or table empty
       if (products.length === 0) setProducts(INITIAL_PRODUCTS);
     } finally {
       setLoading(false);
@@ -64,12 +63,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const addProduct = async (product: Product) => {
     try {
-      // Remover ID gerado no front se for novo, deixar Supabase gerar UUID
-      // Mas se já tiver ID (ex: edição), manter.
-      // Para inserção, vamos omitir o ID se ele for um placeholder temporário
-      const { id, ...rest } = product;
+      const { id, groupId, ...rest } = product;
       
       const dbProduct = {
+        group_id: groupId,
         reference: rest.reference,
         name: rest.name,
         description: rest.description,
@@ -97,6 +94,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateProduct = async (product: Product) => {
     try {
       const dbProduct = {
+        group_id: product.groupId,
         reference: product.reference,
         name: product.name,
         description: product.description,
@@ -134,8 +132,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // Deleta todas as variações de um grupo
+  const deleteGroup = async (groupId: string) => {
+     try {
+      const { error } = await supabase.from('products').delete().eq('group_id', groupId);
+      if (error) throw error;
+      setProducts(prev => prev.filter(p => p.groupId !== groupId));
+    } catch (error) {
+      console.error("Erro ao deletar grupo:", error);
+      alert("Erro ao excluir grupo.");
+    }
+  }
+
   return (
-    <DataContext.Provider value={{ products, loading, addProduct, updateProduct, deleteProduct, refreshProducts: fetchProducts }}>
+    <DataContext.Provider value={{ products, loading, addProduct, updateProduct, deleteProduct, deleteGroup, refreshProducts: fetchProducts }}>
       {children}
     </DataContext.Provider>
   );

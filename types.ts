@@ -20,6 +20,7 @@ export interface ColorVariant {
 
 export interface Product {
   id: string;
+  groupId?: string; // ID compartilhado entre variações do mesmo produto (P-GG e Plus Size)
   reference: string;
   name: string;
   description: string;
@@ -27,10 +28,10 @@ export interface Product {
   colors: ColorVariant[];
   priceRepresentative: number;
   priceSacoleira: number;
-  images: string[]; // Array of base64 strings or URLs
+  images: string[]; // Array of URLs
   category?: string;
-  fabric?: string; // New field for Fabric type
-  isHighlight?: boolean; // New field for Highlights
+  fabric?: string;
+  isHighlight?: boolean;
 }
 
 export interface AuthState {

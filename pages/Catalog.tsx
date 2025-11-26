@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
@@ -7,7 +7,7 @@ import { Search, Star } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const Catalog: React.FC = () => {
-  const { products, deleteProduct } = useData();
+  const { products, deleteGroup } = useData();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
@@ -16,6 +16,7 @@ const Catalog: React.FC = () => {
   // Derive categories
   const categories = Array.from(new Set(products.map(p => p.category || 'Geral')));
 
+  // Filter products based on search/category
   const filteredProducts = products.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           p.reference.toLowerCase().includes(searchTerm.toLowerCase());
@@ -30,13 +31,38 @@ const Catalog: React.FC = () => {
     return matchesSearch && matchesCategory;
   });
 
+  // Group products by groupId
+  const groupedProducts = useMemo(() => {
+    const groups: { [key: string]: typeof products } = {};
+    const ungrouped: typeof products = [];
+
+    filteredProducts.forEach(p => {
+      if (p.groupId) {
+        if (!groups[p.groupId]) {
+          groups[p.groupId] = [];
+        }
+        groups[p.groupId].push(p);
+      } else {
+        // Fallback for old items without group_id: treat as unique group based on ID
+        if (!groups[p.id]) {
+           groups[p.id] = [p];
+        }
+      }
+    });
+
+    // Sort groups by the creation date of the first item (approximation) or just return values
+    return Object.values(groups);
+  }, [filteredProducts]);
+
   const handleEdit = (product: any) => {
+    // When editing, we pass the ID of one of the products. 
+    // The AdminForm will handle loading all variants of that group.
     navigate(`/admin/products/edit/${product.id}`);
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm('Tem certeza que deseja excluir este produto?')) {
-      deleteProduct(id);
+  const handleDeleteGroup = (groupId: string) => {
+    if (confirm('Tem certeza que deseja excluir todas as variações deste produto?')) {
+      deleteGroup(groupId);
     }
   };
 
@@ -116,10 +142,10 @@ const Catalog: React.FC = () => {
                 ? 'Destaques da Kavin\'s' 
                 : categoryFilter}
           </h2>
-          <p className="text-sm text-gray-500">{filteredProducts.length} peças encontradas</p>
+          <p className="text-sm text-gray-500">{groupedProducts.length} itens encontrados (agrupados)</p>
         </div>
 
-        {filteredProducts.length === 0 ? (
+        {groupedProducts.length === 0 ? (
           <div className="text-center py-20 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white shadow-sm mb-4">
               <Search className="h-8 w-8 text-gray-300" />
@@ -129,12 +155,12 @@ const Catalog: React.FC = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredProducts.map(product => (
+            {groupedProducts.map((group, idx) => (
               <ProductCard 
-                key={product.id} 
-                product={product} 
+                key={group[0].id || idx} 
+                variants={group} 
                 onEdit={user?.role === UserRole.ADMIN ? handleEdit : undefined}
-                onDelete={user?.role === UserRole.ADMIN ? handleDelete : undefined}
+                onDeleteGroup={user?.role === UserRole.ADMIN ? handleDeleteGroup : undefined}
               />
             ))}
           </div>
