@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
-import { Trash2, UserPlus, User as UserIcon, Shield } from 'lucide-react';
+import { Trash2, UserPlus, User as UserIcon, Shield, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const AdminUserManagement: React.FC = () => {
@@ -14,13 +14,16 @@ const AdminUserManagement: React.FC = () => {
     password: '',
     role: UserRole.REPRESENTANTE
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    addUser({
+    setIsSubmitting(true);
+    await addUser({
       id: `user-${Date.now()}`,
       ...newUser
     });
+    setIsSubmitting(false);
     setNewUser({ name: '', email: '', password: '', role: UserRole.REPRESENTANTE });
   };
 
@@ -54,6 +57,7 @@ const AdminUserManagement: React.FC = () => {
                     value={newUser.name}
                     onChange={e => setNewUser({...newUser, name: e.target.value})}
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                    placeholder="Nome Completo"
                   />
                 </div>
                 <div>
@@ -64,16 +68,18 @@ const AdminUserManagement: React.FC = () => {
                     value={newUser.email}
                     onChange={e => setNewUser({...newUser, email: e.target.value})}
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                    placeholder="email@exemplo.com"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Senha</label>
                   <input
-                    type="password"
+                    type="text"
                     required
                     value={newUser.password}
                     onChange={e => setNewUser({...newUser, password: e.target.value})}
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                    placeholder="Mínimo 6 caracteres"
                   />
                 </div>
                 <div>
@@ -90,9 +96,17 @@ const AdminUserManagement: React.FC = () => {
                 </div>
                 <button
                   type="submit"
-                  className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                  disabled={isSubmitting}
+                  className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
                 >
-                  Cadastrar
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="animate-spin w-4 h-4 mr-2" />
+                      Cadastrando...
+                    </>
+                  ) : (
+                    'Cadastrar'
+                  )}
                 </button>
               </form>
             </div>
@@ -101,6 +115,10 @@ const AdminUserManagement: React.FC = () => {
           {/* List */}
           <div className="lg:col-span-2">
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                 <h3 className="font-medium text-gray-700">Usuários Cadastrados</h3>
+                 <span className="text-xs text-gray-500">{users.length} usuários</span>
+              </div>
               <ul className="divide-y divide-gray-200">
                 {users.map(u => (
                   <li key={u.id} className="p-4 hover:bg-gray-50 transition-colors">
@@ -124,6 +142,7 @@ const AdminUserManagement: React.FC = () => {
                           <button
                             onClick={() => deleteUser(u.id)}
                             className="text-gray-400 hover:text-red-500 transition-colors"
+                            title="Remover acesso"
                           >
                             <Trash2 className="h-5 w-5" />
                           </button>
@@ -133,6 +152,11 @@ const AdminUserManagement: React.FC = () => {
                   </li>
                 ))}
               </ul>
+              {users.length === 0 && (
+                <div className="p-8 text-center text-gray-500">
+                  Nenhum usuário cadastrado além do administrador.
+                </div>
+              )}
             </div>
           </div>
 

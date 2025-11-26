@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserRole, AuthState } from '../types';
-import { supabase } from '../services/supabaseClient';
+import { supabase, supabaseUrl, supabaseAnonKey } from '../services/supabaseClient';
 import { INITIAL_USERS } from '../constants';
+import { createClient } from '@supabase/supabase-js';
 
 interface AuthContextType extends AuthState {
   login: (email: string, pass: string) => Promise<boolean>;
@@ -79,7 +80,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         // PERFIL NÃO ENCONTRADO, MAS USUÁRIO LOGADO
         // Isso acontece se o cadastro foi feito mas o insert na tabela profiles falhou ou não aconteceu.
-        // Vamos forçar a criação do perfil agora.
         
         if (email === 'gustavo_benvindo80@hotmail.com') {
              console.log("Perfil admin não encontrado, criando agora...");
@@ -102,7 +102,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
              }
         }
 
-        // Fallback visual se falhar o banco (mas marcamos como possivelmente offline ou sem permissão)
+        // Fallback visual
         setCurrentUser({
            id: userId,
            name: 'Usuário',
@@ -147,10 +147,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
            return false; // Retorna false para não cair no Mock Mode
         }
 
-        // Tratamento para "Invalid login credentials" (Pode ser senha errada OU usuário inexistente)
-        // Se for o admin principal, tentamos criar a conta automaticamente
+        // Tenta criar conta admin automaticamente se não existir
         if (error.message.includes("Invalid login credentials") && email === 'gustavo_benvindo80@hotmail.com') {
-            console.log("Usuário não encontrado, tentando cadastrar automaticamente...");
+            console.log("Usuário Admin não encontrado, tentando cadastrar automaticamente...");
             
             const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
                 email,
@@ -161,7 +160,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             });
 
             if (signUpError) {
-                // Se der erro no cadastro também
                 if (signUpError.message.toLowerCase().includes("rate limit")) {
                    alert("Muitas tentativas. Aguarde um minuto.");
                    return false;
@@ -171,14 +169,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
 
             if (signUpData.user) {
-                // Conta criada! 
-                // Se a sessão for null, é porque precisa confirmar email
                 if (!signUpData.session) {
                     alert("Conta de Administrador criada com sucesso!\n\nIMPORTANTE: O sistema enviou um link de confirmação para " + email + ".\n\nVocê PRECISA confirmar o email antes de fazer login e salvar produtos.");
                     return false;
                 }
 
-                // Se logou direto (sem confirmação de email configurada), cria o perfil
+                // Se logou direto
                 const { error: profileError } = await supabase.from('profiles').insert({
                     id: signUpData.user.id,
                     email: email,
@@ -198,18 +194,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return true;
 
     } catch (error: any) {
-      // Se chegamos aqui, o login real falhou.
-      
-      // Se for erro de email não confirmado, JÁ TRATAMOS ACIMA e retornamos false. 
-      // Se passou batido, tratamos aqui:
       if (error.message && error.message.toLowerCase().includes("email not confirmed")) {
          alert("Verifique seu email para confirmar o cadastro antes de entrar.");
          return false;
       }
 
-      // Se for outro erro, ou falha de rede, oferecemos o modo offline
       console.log("Falha no login online, tentando modo offline...");
-      
       const mockUser = INITIAL_USERS.find(u => u.email === email && u.password === pass);
       if (mockUser) {
         if (window.confirm("Falha ao conectar no servidor. Deseja entrar em MODO OFFLINE/VISUALIZAÇÃO?\n\n(Atenção: Você NÃO conseguirá salvar novos produtos neste modo)")) {
@@ -231,30 +221,83 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCurrentUser(null);
   };
 
+  // --- NOVA FUNÇÃO DE ADICIONAR USUÁRIO ---
   const addUser = async (userData: Partial<User> & { password: string }) => {
       if (isOfflineMode) {
           alert("Modo Offline: Não é possível adicionar usuários.");
           return;
       }
-      
-      alert("Para criar um login real, o usuário deve se cadastrar na tela de login. Este painel apenas gerencia permissões no banco de dados.");
-      
-      const { error } = await supabase.from('profiles').insert({
-          id: crypto.randomUUID(),
-          email: userData.email,
-          name: userData.name,
-          role: userData.role
+
+      // TRUQUE: Criar um cliente Supabase temporário que NÃO salva sessão.
+      // Isso permite criar um novo usuário sem deslogar o admin atual.
+      const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, {
+        auth: {
+          persistSession: false, // Importante: não sobrescreve o login do admin
+          autoRefreshToken: false,
+          detectSessionInUrl: false
+        }
       });
 
-      if (error) alert("Erro ao salvar perfil: " + error.message);
-      else fetchUsersList();
+      try {
+        // 1. Criar o usuário na Autenticação (Login)
+        const { data: authData, error: authError } = await tempSupabase.auth.signUp({
+          email: userData.email!,
+          password: userData.password,
+          options: {
+            data: { name: userData.name }
+          }
+        });
+
+        if (authError) {
+          throw new Error("Erro ao criar login: " + authError.message);
+        }
+
+        if (authData.user) {
+          const userId = authData.user.id;
+
+          // 2. Criar o perfil na tabela 'profiles' usando as credenciais do ADMIN (cliente principal)
+          // O Admin tem permissão para inserir na tabela profiles.
+          const { error: profileError } = await supabase.from('profiles').insert({
+            id: userId,
+            email: userData.email,
+            name: userData.name,
+            role: userData.role
+          });
+
+          if (profileError) {
+             // Se falhar o perfil, o login foi criado mas não tem role.
+             // Tentamos deletar o usuário via função RPC se existisse backend, mas aqui apenas avisamos.
+             throw new Error("Login criado, mas erro ao salvar permissões: " + profileError.message);
+          }
+
+          // Atualiza lista local
+          fetchUsersList();
+          
+          if (!authData.session) {
+             alert(`Usuário cadastrado com sucesso!\n\nAVISO: O Supabase enviou um email de confirmação para ${userData.email}. O usuário precisará confirmar antes de logar.`);
+          } else {
+             alert("Usuário cadastrado com sucesso e já está ativo!");
+          }
+        }
+
+      } catch (error: any) {
+        console.error("Erro ao adicionar usuário:", error);
+        alert(error.message);
+      }
   };
 
   const deleteUser = async (id: string) => {
       if (isOfflineMode) return;
-      const { error } = await supabase.from('profiles').delete().eq('id', id);
-      if (error) alert("Erro ao deletar: " + error.message);
-      else setUsersList(prev => prev.filter(u => u.id !== id));
+      
+      // Nota: Client-side deletion of AUTH users is not possible directly securely.
+      // We can only delete the PROFILE properly here. 
+      // The Login remains but loses permissions.
+      
+      if(window.confirm("Tem certeza? Isso removerá o acesso deste usuário ao sistema.")) {
+        const { error } = await supabase.from('profiles').delete().eq('id', id);
+        if (error) alert("Erro ao deletar: " + error.message);
+        else setUsersList(prev => prev.filter(u => u.id !== id));
+      }
   };
 
   return (
