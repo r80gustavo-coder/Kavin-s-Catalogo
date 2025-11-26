@@ -28,6 +28,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .order('created_at', { ascending: false });
 
       if (error) {
+        // Se a tabela não existir, ignora erro silenciosamente em dev
+        if (error.code === '42P01') console.warn("Tabela products não encontrada.");
         throw error;
       }
 
@@ -40,8 +42,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           description: p.description,
           sizes: p.sizes || [],
           colors: p.colors || [],
-          priceRepresentative: p.price_representative,
-          priceSacoleira: p.price_sacoleira,
+          priceRepresentative: Number(p.price_representative),
+          priceSacoleira: Number(p.price_sacoleira),
           images: p.images || [],
           category: p.category,
           fabric: p.fabric,
@@ -65,15 +67,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const { id, groupId, ...rest } = product;
       
+      // Ensure groupId is valid UUID or null (but for grouping we need it)
+      const validGroupId = groupId && groupId.length > 10 ? groupId : null;
+
       const dbProduct = {
-        group_id: groupId,
+        group_id: validGroupId,
         reference: rest.reference,
         name: rest.name,
         description: rest.description,
         sizes: rest.sizes,
-        colors: rest.colors,
-        price_representative: rest.priceRepresentative,
-        price_sacoleira: rest.priceSacoleira,
+        colors: rest.colors, // Supabase handles JSONB automatically
+        price_representative: Number(rest.priceRepresentative),
+        price_sacoleira: Number(rest.priceSacoleira),
         images: rest.images,
         category: rest.category,
         fabric: rest.fabric,
@@ -82,11 +87,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const { error } = await supabase.from('products').insert([dbProduct]);
       
-      if (error) throw error;
+      if (error) {
+          console.error("Supabase Insert Error:", error);
+          throw new Error(error.message || JSON.stringify(error));
+      }
+      
       await fetchProducts();
-    } catch (error) {
-      console.error("Erro ao adicionar produto:", error);
-      alert("Erro ao salvar no banco de dados.");
+    } catch (error: any) {
+      console.error("Erro detalhado ao adicionar produto:", error);
+      alert(`Erro ao salvar no banco de dados: ${error.message || "Erro desconhecido"}`);
       throw error;
     }
   };
@@ -100,8 +109,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         description: product.description,
         sizes: product.sizes,
         colors: product.colors,
-        price_representative: product.priceRepresentative,
-        price_sacoleira: product.priceSacoleira,
+        price_representative: Number(product.priceRepresentative),
+        price_sacoleira: Number(product.priceSacoleira),
         images: product.images,
         category: product.category,
         fabric: product.fabric,
@@ -113,10 +122,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .update(dbProduct)
         .eq('id', product.id);
 
-      if (error) throw error;
+      if (error) throw new Error(error.message);
       await fetchProducts();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro ao atualizar produto:", error);
+      alert(`Erro ao atualizar: ${error.message}`);
       throw error;
     }
   };
@@ -126,21 +136,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { error } = await supabase.from('products').delete().eq('id', id);
       if (error) throw error;
       setProducts(prev => prev.filter(p => p.id !== id));
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro ao deletar produto:", error);
-      alert("Erro ao excluir.");
+      alert("Erro ao excluir: " + error.message);
     }
   };
 
-  // Deleta todas as variações de um grupo
   const deleteGroup = async (groupId: string) => {
      try {
       const { error } = await supabase.from('products').delete().eq('group_id', groupId);
       if (error) throw error;
       setProducts(prev => prev.filter(p => p.groupId !== groupId));
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro ao deletar grupo:", error);
-      alert("Erro ao excluir grupo.");
+      alert("Erro ao excluir grupo: " + error.message);
     }
   }
 

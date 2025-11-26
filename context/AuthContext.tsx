@@ -21,10 +21,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Verificar sessão ao carregar
   useEffect(() => {
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        await loadUserProfile(session.user.id, session.user.email!);
-      } else {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          await loadUserProfile(session.user.id, session.user.email!);
+        } else {
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error("Erro ao verificar sessão:", error);
         setLoading(false);
       }
     };
@@ -66,15 +71,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
            fetchUsersList();
         }
       } else {
-        // Fallback para admin mockado se o banco estiver vazio ou erro
+        // Se o perfil não existe mas o usuário está logado (ex: acabou de criar conta)
+        // Vamos tentar criar o perfil automaticamente se for o email do admin
         if (email === 'gustavo_benvindo80@hotmail.com') {
-             setCurrentUser({
+             const newProfile = {
                 id: userId,
-                name: 'Gustavo Admin',
+                name: 'Gustavo Benvindo',
                 email: email,
                 role: UserRole.ADMIN
-             });
+             };
+             
+             const { error: insertError } = await supabase.from('profiles').insert(newProfile);
+             
+             if (!insertError) {
+                setCurrentUser(newProfile);
+                fetchUsersList();
+                return;
+             }
         }
+
+        // Fallback visual se falhar o banco
+        setCurrentUser({
+           id: userId,
+           name: 'Usuário',
+           email: email,
+           role: email === 'gustavo_benvindo80@hotmail.com' ? UserRole.ADMIN : UserRole.GUEST
+        });
       }
     } catch (e) {
       console.error("Erro ao carregar perfil", e);
@@ -98,20 +120,69 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, pass: string): Promise<boolean> => {
     try {
-      // Tenta login no Supabase
+      // 1. Tenta login normal
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password: pass
       });
 
-      if (error) throw error;
+      if (error) {
+        // 2. Se falhar e for "Invalid login credentials", pode ser que o usuário não exista no Supabase.
+        // Vamos tentar criar a conta automaticamente para facilitar o setup.
+        if (error.message.includes("Invalid login credentials") && email === 'gustavo_benvindo80@hotmail.com') {
+            console.log("Usuário não encontrado, tentando cadastrar automaticamente...");
+            
+            const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+                email,
+                password: pass,
+                options: {
+                    data: { name: 'Gustavo Benvindo' }
+                }
+            });
+
+            if (signUpError) {
+                alert(`Erro ao tentar criar conta automática: ${signUpError.message}`);
+                throw signUpError;
+            }
+
+            if (signUpData.user) {
+                // Conta criada! Agora criamos o perfil de Admin
+                const { error: profileError } = await supabase.from('profiles').insert({
+                    id: signUpData.user.id,
+                    email: email,
+                    name: 'Gustavo Benvindo',
+                    role: 'ADMIN'
+                });
+
+                if (profileError) {
+                    console.error("Erro ao criar perfil de admin:", profileError);
+                }
+                
+                // Se o Supabase exigir confirmação de email, avisar o usuário
+                if (!signUpData.session) {
+                    alert("Conta criada! Por favor, verifique seu email para confirmar o cadastro antes de fazer login.");
+                    return false;
+                }
+                
+                return true;
+            }
+        }
+        
+        throw error;
+      }
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro no login:", error);
       
-      // FALLBACK MOCK PARA DEMONSTRAÇÃO (Caso Supabase não esteja configurado)
+      // Se for um erro de rede ou configuração, avisa
+      if (error.message) {
+          alert(`Erro de Login: ${error.message}`);
+      }
+
+      // FALLBACK MOCK PARA DEMONSTRAÇÃO (Apenas visual, não permite salvar no banco)
       const mockUser = INITIAL_USERS.find(u => u.email === email && u.password === pass);
       if (mockUser) {
+        alert("Atenção: Entrando em MODO OFFLINE/MOCK. As alterações NÃO serão salvas no banco de dados.");
         setCurrentUser(mockUser);
         return true;
       }
@@ -125,16 +196,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCurrentUser(null);
   };
 
-  // Nota: Criar usuários via client-side desloga o usuário atual.
-  // Em produção, isso deve ser feito via Supabase Admin API (Backend/Edge Function).
-  // Aqui, vamos apenas simular a inserção na tabela profiles se o Auth falhar ou instruir o uso do dashboard.
   const addUser = async (userData: Partial<User> & { password: string }) => {
-      alert("Aviso: Para criar novos usuários reais no Supabase, utilize o painel do Supabase > Authentication. Este formulário apenas cria o registro visual.");
+      // Para adicionar usuários reais, precisaríamos usar a API Admin do Supabase
+      // Por enquanto, salvamos no banco na tabela profiles para referência
+      if (!userData.email || !userData.password) return;
+      
+      // Nota: Isso não cria o login real (auth.users), apenas o registro no perfil
+      // Em um app real, o usuário teria que se cadastrar ou usariamos uma Edge Function
+      alert("Para criar um login real, o usuário deve se cadastrar na tela de login. Este painel apenas gerencia permissões.");
+      
+      const { error } = await supabase.from('profiles').insert({
+          id: crypto.randomUUID(), // Placeholder ID
+          email: userData.email,
+          name: userData.name,
+          role: userData.role
+      });
+
+      if (error) alert("Erro ao salvar perfil: " + error.message);
+      else fetchUsersList();
   };
 
   const deleteUser = async (id: string) => {
-      // Apenas visual
-      setUsersList(prev => prev.filter(u => u.id !== id));
+      const { error } = await supabase.from('profiles').delete().eq('id', id);
+      if (error) alert("Erro ao deletar: " + error.message);
+      else setUsersList(prev => prev.filter(u => u.id !== id));
   };
 
   return (
@@ -143,7 +228,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isAuthenticated: !!currentUser,
       login,
       logout,
-      users: usersList.length > 0 ? usersList : INITIAL_USERS, // Fallback visual
+      users: usersList.length > 0 ? usersList : INITIAL_USERS,
       addUser,
       deleteUser
     }}>
