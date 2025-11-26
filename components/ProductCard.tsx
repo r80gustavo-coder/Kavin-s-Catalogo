@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Product, UserRole } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { Tag, Edit, Trash2, ShoppingBag, ChevronLeft, ChevronRight, Star, Layers, Package } from 'lucide-react';
+import { Tag, Edit, Trash2, ShoppingBag, ChevronLeft, ChevronRight, Star, Layers } from 'lucide-react';
 
 interface ProductCardProps {
   variants: Product[]; // Receives an array of products (the variants)

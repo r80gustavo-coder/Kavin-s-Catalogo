@@ -8,7 +8,7 @@ interface AuthContextType extends AuthState {
   login: (email: string, pass: string) => Promise<boolean>;
   logout: () => void;
   users: User[]; 
-  addUser: (user: Partial<User> & { password: string }) => Promise<void>;
+  addUser: (user: Partial<User> & { password: string }) => Promise<boolean>;
   deleteUser: (id: string) => Promise<void>;
   isOfflineMode: boolean; 
 }
@@ -211,10 +211,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCurrentUser(null);
   };
 
-  const addUser = async (userData: Partial<User> & { password: string }) => {
+  const addUser = async (userData: Partial<User> & { password: string }): Promise<boolean> => {
       if (isOfflineMode) {
           alert("Modo Offline: Não é possível adicionar usuários.");
-          return;
+          return false;
       }
 
       // Cliente temporário para criar usuário sem deslogar admin
@@ -233,31 +233,53 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           options: { data: { name: userData.name } }
         });
 
-        // Supabase retorna "User already registered" como sucesso falso ou erro específico dependendo da config
-        // Se retornar ID mas session null, pode ser email confirm pending ou user existe
-        
-        if (authError) throw new Error(authError.message);
-
-        if (authData.user) {
-          // Se o usuário já existe na Auth (retorna id falso ou real), o upsert garante que o perfil fique correto
-          const { error: profileError } = await supabase.from('profiles').upsert({
-            id: authData.user.id,
-            email: userData.email,
-            name: userData.name,
-            role: userData.role
-          });
-
-          if (profileError) {
-             throw new Error("Erro ao salvar permissões: " + profileError.message);
-          }
-
-          fetchUsersList();
-          alert(`Usuário ${userData.email} configurado com sucesso!`);
+        // Se houver erro e não for "usuário já registrado", lança exceção
+        if (authError && !authError.message.includes("already registered")) {
+            throw new Error(authError.message);
         }
+
+        // Se retornou usuário (seja novo ou existente com fake ID do supabase)
+        if (authData.user || (authError && authError.message.includes("already registered"))) {
+            
+            // Tenta buscar o ID real se o usuário já existir, ou usa o retornado
+            let targetId = authData.user?.id;
+            
+            // Se o usuário já existe, o ID retornado pelo signUp pode ser fake ou nulo dependendo da config.
+            // Nesse caso, tentamos fazer o upsert no profile usando o email para garantir (se possível, mas o profile usa ID como PK).
+            // NOTA: Se o usuário já existe no Auth mas não no Profile, precisamos do ID real.
+            // Como Admin, não conseguimos ver o ID de outro usuário via API cliente facilmente sem uma Edge Function.
+            // Mas vamos tentar o upsert direto. Se falhar por FK, é porque o ID estava errado.
+            
+            if (targetId) {
+                const { error: profileError } = await supabase.from('profiles').upsert({
+                    id: targetId,
+                    email: userData.email,
+                    name: userData.name,
+                    role: userData.role
+                });
+
+                if (profileError) {
+                    if (profileError.message.includes("foreign key")) {
+                        throw new Error("Este email já está cadastrado no sistema, mas houve um erro ao vincular o perfil. Contate o suporte.");
+                    }
+                    throw new Error("Erro ao salvar permissões: " + profileError.message);
+                }
+            } else {
+                // Caso extremo: Usuário existe, mas signUp não retornou ID.
+                alert("Este email já está registrado no sistema de autenticação.");
+                return false;
+            }
+
+            fetchUsersList();
+            alert(`Usuário ${userData.email} configurado com sucesso!`);
+            return true;
+        }
+        return false;
 
       } catch (error: any) {
         console.error("Erro ao adicionar usuário:", error);
         alert(error.message);
+        return false;
       }
   };
 
