@@ -1,7 +1,7 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
-import { LogOut, Users, PlusCircle, LogIn, Store } from 'lucide-react';
+import { LogOut, Users, PlusCircle, LogIn } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 const Navbar: React.FC = () => {

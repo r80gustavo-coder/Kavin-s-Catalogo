@@ -1,4 +1,6 @@
-// Serviço de IA desativado para evitar erros de build no Vercel.
+// Serviço de IA desativado conforme solicitado para evitar erros de build no Vercel.
+// Mantido apenas como placeholder caso decida reativar futuramente.
+
 export const generateProductDescription = async (
   name: string,
   reference: string,
@@ -6,5 +8,6 @@ export const generateProductDescription = async (
   category: string,
   fabric: string
 ): Promise<string> => {
-  return ""; 
+  console.log("IA Desativada");
+  return "";
 };

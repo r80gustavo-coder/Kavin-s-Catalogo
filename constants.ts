@@ -11,18 +11,18 @@ export const MOCK_ADMIN: User = {
 export const INITIAL_USERS: User[] = [
   MOCK_ADMIN,
   {
-    id: 'user-002',
-    name: 'Maria Representante',
-    email: 'maria@rep.com',
+    id: 'user-repre',
+    name: 'Representante Kavin',
+    email: 'repre@kavins.com.br',
     role: UserRole.REPRESENTANTE,
-    password: '123'
+    password: 'repre2026'
   },
   {
-    id: 'user-003',
-    name: 'Ana Sacoleira',
-    email: 'ana@sacola.com',
+    id: 'user-sacoleira',
+    name: 'Sacoleira Kavin',
+    email: 'sacoleira@kavins.com',
     role: UserRole.SACOLEIRA,
-    password: '123'
+    password: 'sacoleira2026'
   }
 ];
 
@@ -43,23 +43,5 @@ export const INITIAL_PRODUCTS: Product[] = [
     category: 'Vestidos',
     fabric: 'Viscose Premium',
     isHighlight: true
-  },
-  {
-    id: 'prod-002',
-    reference: 'REF-2024-B',
-    name: 'Blusa Básica Premium',
-    description: 'Blusa básica essencial para o dia a dia, confeccionada em algodão egípcio.',
-    sizes: ['G1', 'G2', 'G3'],
-    colors: [
-      { hex: '#000000', name: 'Preto' },
-      { hex: '#FFFFFF', name: 'Branco' },
-      { hex: '#2C3E50', name: 'Azul Marinho' }
-    ],
-    priceRepresentative: 29.90,
-    priceSacoleira: 39.90,
-    images: ['https://picsum.photos/400/600?random=2'],
-    category: 'Blusas',
-    fabric: 'Algodão Egípcio',
-    isHighlight: false
   }
 ];
