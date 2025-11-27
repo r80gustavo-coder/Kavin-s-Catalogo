@@ -1,6 +1,6 @@
-// Serviço de IA desativado conforme solicitado para evitar erros de build no Vercel.
-// Mantido apenas como placeholder caso decida reativar futuramente.
+import { GoogleGenAI } from "@google/genai";
 
+// Serviço de IA para geração de descrições de produtos
 export const generateProductDescription = async (
   name: string,
   reference: string,
@@ -8,6 +8,34 @@ export const generateProductDescription = async (
   category: string,
   fabric: string
 ): Promise<string> => {
-  console.log("IA Desativada");
-  return "";
+  try {
+    // API Key must be obtained exclusively from process.env.API_KEY
+    if (!process.env.API_KEY) {
+      console.warn("API_KEY not found in environment variables.");
+      return "";
+    }
+
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
+    const prompt = `Crie uma descrição comercial e elegante para um produto de moda.
+    
+    Detalhes do Produto:
+    - Nome: ${name}
+    - Referência: ${reference}
+    - Categoria: ${category}
+    - Tecido: ${fabric}
+    - Cores: ${colors.join(', ')}
+    
+    A descrição deve enfatizar a qualidade do tecido e ser adequada para um catálogo online. Mantenha o texto conciso (aprox. 300 caracteres).`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+    });
+
+    return response.text || "";
+  } catch (error) {
+    console.error("Erro ao gerar descrição com Gemini:", error);
+    return "";
+  }
 };

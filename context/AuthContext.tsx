@@ -1,8 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserRole, AuthState } from '../types';
-import { supabase, supabaseUrl, supabaseAnonKey } from '../services/supabaseClient';
+import { supabase } from '../services/supabaseClient';
 import { INITIAL_USERS } from '../constants';
-import { createClient } from '@supabase/supabase-js';
 
 interface AuthContextType extends AuthState {
   login: (email: string, pass: string) => Promise<boolean>;
