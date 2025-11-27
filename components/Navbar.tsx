@@ -1,7 +1,7 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
-import { LogOut, PlusCircle, LogIn } from 'lucide-react';
+import { LogOut, Users, PlusCircle, LogIn, Store } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 const Navbar: React.FC = () => {
@@ -38,13 +38,22 @@ const Navbar: React.FC = () => {
                 </button>
 
                 {user?.role === UserRole.ADMIN && (
-                  <button
-                    onClick={() => navigate('/admin/products')}
-                    className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive('/admin/products') ? 'text-primary-600 bg-primary-50' : 'text-gray-600 hover:text-primary-600'}`}
-                  >
-                    <PlusCircle className="w-4 h-4 mr-1" />
-                    Produtos
-                  </button>
+                  <>
+                     <button
+                      onClick={() => navigate('/admin/products')}
+                      className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive('/admin/products') ? 'text-primary-600 bg-primary-50' : 'text-gray-600 hover:text-primary-600'}`}
+                    >
+                      <PlusCircle className="w-4 h-4 mr-1" />
+                      Produtos
+                    </button>
+                    <button
+                      onClick={() => navigate('/admin/users')}
+                      className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive('/admin/users') ? 'text-primary-600 bg-primary-50' : 'text-gray-600 hover:text-primary-600'}`}
+                    >
+                      <Users className="w-4 h-4 mr-1" />
+                      Usuários
+                    </button>
+                  </>
                 )}
 
                 <div className="flex items-center border-l pl-4 ml-4 border-gray-200">

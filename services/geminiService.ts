@@ -1,6 +1,4 @@
-// AI Service is disabled to prevent build errors since @google/genai is not in package.json
-// This ensures Vercel builds successfully.
-
+// Serviço de IA desativado para evitar erros de build no Vercel.
 export const generateProductDescription = async (
   name: string,
   reference: string,
@@ -8,5 +6,5 @@ export const generateProductDescription = async (
   category: string,
   fabric: string
 ): Promise<string> => {
-  return "";
+  return ""; 
 };
