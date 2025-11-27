@@ -20,9 +20,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [usersList, setUsersList] = useState<User[]>([]);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
 
-  // LISTA OFICIAL DE USUÁRIOS
-  // Se alguém tentar logar com esses emails e a conta não existir no Supabase,
-  // o sistema criará automaticamente.
+  // VIP USERS: These emails will be auto-created if they try to login and don't exist
   const VIP_USERS = [
       { email: 'gustavo_benvindo80@hotmail.com', role: UserRole.ADMIN, name: 'Gustavo Benvindo' },
       { email: 'representante@kavins.com', role: UserRole.REPRESENTANTE, name: 'Representante Kavin' },
@@ -79,7 +77,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         setIsOfflineMode(false);
       } else {
-        // Fallback: Se o usuário logou mas não tem perfil, cria o perfil baseado na lista VIP
+        // Fallback: If user logged in but has no profile, create based on VIP list
         const vipUser = VIP_USERS.find(u => u.email === email);
         if (vipUser) {
              console.log(`Perfil ${vipUser.role} não encontrado, criando agora...`);
@@ -111,20 +109,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, pass: string): Promise<boolean> => {
     try {
-      // 1. Tenta login normal
+      // 1. Try standard login
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password: pass
       });
 
       if (error) {
-        // Se der erro de credencial inválida, verifica se é um dos usuários VIP
-        // Se for, cria a conta na hora.
+        // If login failed, check if it's a VIP user trying to access for the first time
         const vipUser = VIP_USERS.find(u => u.email === email);
         
         if (error.message.includes("Invalid login credentials") && vipUser) {
             console.log(`Usuário VIP ${vipUser.role} não encontrado, cadastrando automaticamente...`);
             
+            // Auto SignUp
             const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
                 email,
                 password: pass,
@@ -140,7 +138,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
 
             if (signUpData.user) {
-                // Cria o perfil imediatamente
+                // Ensure profile exists
                 await supabase.from('profiles').upsert({
                     id: signUpData.user.id,
                     email: email,
@@ -149,7 +147,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 });
 
                 if (!signUpData.session) {
-                    alert(`Conta ${vipUser.role} criada!\n\nConfirme o email enviado para ${email} antes de logar.`);
+                    alert(`Conta criada! Confirme o email enviado para ${email} antes de logar.`);
                     return false;
                 }
                 
@@ -157,7 +155,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
         }
         
-        // Se for erro de email não confirmado
         if (error.message.toLowerCase().includes("email not confirmed")) {
            alert("Sua conta existe mas o email não foi confirmado.\nVerifique sua caixa de entrada ou SPAM.");
            return false;
@@ -172,7 +169,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error: any) {
       console.log("Falha no login online, tentando modo offline...", error.message);
       
-      // Fallback para Offline Mode usando as constantes
+      // Offline fallback
       const mockUser = INITIAL_USERS.find(u => u.email === email && u.password === pass);
       if (mockUser) {
         if (window.confirm("Servidor indisponível ou credenciais inválidas na nuvem.\n\nEntrar em MODO OFFLINE? (Apenas visualização)")) {
@@ -194,7 +191,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCurrentUser(null);
   };
 
-  // Mock implementation for user management as it is handled by the "VIP" logic automatically
   const addUser = async (user: User) => { return true; };
   const deleteUser = async (id: string) => {};
 
