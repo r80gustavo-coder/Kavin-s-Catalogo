@@ -6,7 +6,6 @@ import { UserRole } from './types';
 import Navbar from './components/Navbar';
 import Catalog from './pages/Catalog';
 import Login from './pages/Login';
-import AdminUserManagement from './pages/AdminUserManagement';
 import AdminProductForm from './pages/AdminProductForm';
 
 // Protected Route Component
@@ -33,14 +32,6 @@ const AppRoutes = () => {
         <Route path="/login" element={<Login />} />
         
         {/* Admin Routes */}
-        <Route 
-          path="/admin/users" 
-          element={
-            <ProtectedRoute roles={[UserRole.ADMIN]}>
-              <AdminUserManagement />
-            </ProtectedRoute>
-          } 
-        />
         <Route 
           path="/admin/products" 
           element={

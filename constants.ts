@@ -13,7 +13,7 @@ export const INITIAL_USERS: User[] = [
   {
     id: 'user-repre',
     name: 'Representante Kavin',
-    email: 'repre@kavins.com.br',
+    email: 'representante@kavins.com',
     role: UserRole.REPRESENTANTE,
     password: 'repre2026'
   },
