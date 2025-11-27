@@ -13,10 +13,8 @@ const Catalog: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
 
-  // Derive categories
   const categories = Array.from(new Set(products.map(p => p.category || 'Geral')));
 
-  // Filter products based on search/category
   const filteredProducts = products.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           p.reference.toLowerCase().includes(searchTerm.toLowerCase());
@@ -31,49 +29,39 @@ const Catalog: React.FC = () => {
     return matchesSearch && matchesCategory;
   });
 
-  // Group products by groupId
+  // Agrupamento Inteligente: Junta produtos com mesmo groupId
   const groupedProducts = useMemo(() => {
     const groups: { [key: string]: typeof products } = {};
-    const ungrouped: typeof products = [];
 
     filteredProducts.forEach(p => {
-      if (p.groupId) {
-        if (!groups[p.groupId]) {
-          groups[p.groupId] = [];
-        }
-        groups[p.groupId].push(p);
-      } else {
-        // Fallback for old items without group_id: treat as unique group based on ID
-        if (!groups[p.id]) {
-           groups[p.id] = [p];
-        }
+      // Se tem groupId, usa ele. Se não, usa o próprio ID (item único)
+      const key = p.groupId || p.id;
+      
+      if (!groups[key]) {
+        groups[key] = [];
       }
+      groups[key].push(p);
     });
 
-    // Sort groups by the creation date of the first item (approximation) or just return values
     return Object.values(groups);
   }, [filteredProducts]);
 
   const handleEdit = (product: any) => {
-    // When editing, we pass the ID of one of the products. 
-    // The AdminForm will handle loading all variants of that group.
     navigate(`/admin/products/edit/${product.id}`);
   };
 
   const handleDeleteGroup = (groupId: string) => {
-    if (confirm('Tem certeza que deseja excluir todas as variações deste produto?')) {
+    if (confirm('ATENÇÃO: Isso excluirá TODAS as variações (tamanhos/grades) deste produto. Continuar?')) {
       deleteGroup(groupId);
     }
   };
 
   return (
     <div className="min-h-screen bg-white pb-20">
-      {/* Sticky Header Section */}
       <div className="sticky top-16 z-40 bg-white/95 backdrop-blur-sm border-b border-gray-100 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           
           <div className="flex flex-col md:flex-row gap-4 justify-between items-center">
-             {/* Search */}
             <div className="relative w-full md:w-96">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <Search className="h-4 w-4 text-gray-400" />
@@ -87,7 +75,6 @@ const Catalog: React.FC = () => {
               />
             </div>
             
-            {/* Category Pills */}
             <div className="w-full md:w-auto overflow-x-auto scrollbar-hide">
               <div className="flex space-x-2 py-1">
                 <button
@@ -132,26 +119,17 @@ const Catalog: React.FC = () => {
         </div>
       </div>
 
-      {/* Grid */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
         <div className="mb-6">
           <h2 className="text-xl font-bold text-gray-900">
-            {categoryFilter === 'all' 
-              ? 'Coleção Completa' 
-              : categoryFilter === 'highlights' 
-                ? 'Destaques da Kavin\'s' 
-                : categoryFilter}
+            {categoryFilter === 'all' ? 'Coleção Completa' : categoryFilter === 'highlights' ? 'Destaques' : categoryFilter}
           </h2>
-          <p className="text-sm text-gray-500">{groupedProducts.length} itens encontrados (agrupados)</p>
+          <p className="text-sm text-gray-500">{groupedProducts.length} modelos encontrados</p>
         </div>
 
         {groupedProducts.length === 0 ? (
           <div className="text-center py-20 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white shadow-sm mb-4">
-              <Search className="h-8 w-8 text-gray-300" />
-            </div>
             <h3 className="text-lg font-medium text-gray-900">Nenhum produto encontrado</h3>
-            <p className="mt-1 text-gray-500">Tente ajustar seus filtros de busca.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
