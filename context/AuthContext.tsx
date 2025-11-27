@@ -9,6 +9,8 @@ interface AuthContextType extends AuthState {
   logout: () => void;
   users: User[]; 
   isOfflineMode: boolean; 
+  addUser: (user: User) => Promise<boolean>;
+  deleteUser: (id: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -193,6 +195,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCurrentUser(null);
   };
 
+  // Mock implementation for user management as it is handled by the "VIP" logic automatically
+  const addUser = async (user: User) => { return true; };
+  const deleteUser = async (id: string) => {};
+
   return (
     <AuthContext.Provider value={{
       user: currentUser,
@@ -200,7 +206,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       login,
       logout,
       users: usersList,
-      isOfflineMode
+      isOfflineMode,
+      addUser,
+      deleteUser
     }}>
       {!loading && children}
     </AuthContext.Provider>
