@@ -1,35 +1,23 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Mail, Store, Loader2 } from 'lucide-react';
+import { Lock, Mail, Store } from 'lucide-react';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isLoading) return;
-
     setError('');
-    setIsLoading(true);
-    
-    try {
-      const success = await login(email, password);
-      if (success) {
-        navigate('/');
-      } else {
-        // Error is usually handled inside login with an alert, but we set generic here just in case
-        if (!error) setError('Não foi possível fazer login. Verifique suas credenciais.');
-      }
-    } catch (err) {
-      setError('Ocorreu um erro inesperado.');
-    } finally {
-      setIsLoading(false);
+    const success = await login(email, password);
+    if (success) {
+      navigate('/');
+    } else {
+      setError('Credenciais inválidas. Tente novamente.');
     }
   };
 
@@ -103,17 +91,9 @@ const Login: React.FC = () => {
             <div>
               <button
                 type="submit"
-                disabled={isLoading}
-                className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${isLoading ? 'bg-gray-400 cursor-not-allowed' : 'bg-primary-600 hover:bg-primary-700'} focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors`}
+                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors"
               >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="animate-spin h-4 w-4 mr-2" />
-                    Entrando...
-                  </>
-                ) : (
-                  'Entrar'
-                )}
+                Entrar
               </button>
             </div>
             
